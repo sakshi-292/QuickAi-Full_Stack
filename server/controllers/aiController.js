@@ -11,6 +11,29 @@ const AI = new OpenAI({
     baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/"
 });
 
+// Helper function to make API calls with retry logic for rate limits
+const makeAICall = async (config, retries = 3) => {
+    for (let attempt = 0; attempt < retries; attempt++) {
+        try {
+            return await AI.chat.completions.create(config);
+        } catch (error) {
+            const statusCode = error.status || error.response?.status || error.statusCode;
+            const isRateLimit = statusCode === 429;
+            
+            if (isRateLimit && attempt < retries - 1) {
+                // Exponential backoff: 1s, 2s, 4s
+                const delay = Math.pow(2, attempt) * 1000;
+                console.log(`Rate limit hit (429). Retrying in ${delay}ms... (Attempt ${attempt + 1}/${retries})`);
+                await new Promise(resolve => setTimeout(resolve, delay));
+                continue;
+            }
+            
+            // If it's the last attempt or not a rate limit error, throw it
+            throw error;
+        }
+    }
+};
+
 export const generateArticle = async (req, res)=>{
     try {
         const { userId } = req.auth();
@@ -22,8 +45,8 @@ export const generateArticle = async (req, res)=>{
             return res.json({ success: false, message: "Limit reached. Upgrade to continue."})
         }
 
-        const response = await AI.chat.completions.create({
-            model: "gemini-2.0-flash",
+        const response = await makeAICall({
+            model: "gemini-1.5-flash",
             messages: [{
                     role: "user",
                     content: prompt,
@@ -50,8 +73,21 @@ export const generateArticle = async (req, res)=>{
 
 
     } catch (error) {
-        console.log(error.message)
-        res.json({success: false, message: error.message})
+        console.log('Error in generateArticle:', error.message, error.status || error.response?.status);
+        
+        const statusCode = error.status || error.response?.status || error.statusCode;
+        
+        if (statusCode === 429) {
+            return res.status(429).json({
+                success: false, 
+                message: "Too many requests. Please wait a few seconds and try again."
+            });
+        }
+        
+        res.status(statusCode || 500).json({
+            success: false, 
+            message: error.message || "Failed to generate article. Please try again."
+        });
     }
 }
 
@@ -66,8 +102,8 @@ export const generateBlogTitle = async (req, res)=>{
             return res.json({ success: false, message: "Limit reached. Upgrade to continue."})
         }
 
-        const response = await AI.chat.completions.create({
-            model: "gemini-2.0-flash",
+        const response = await makeAICall({
+            model: "gemini-1.5-flash",
             messages: [{ role: "user", content: prompt, } ],
             temperature: 0.7,
             max_tokens: 100,
@@ -90,8 +126,21 @@ export const generateBlogTitle = async (req, res)=>{
 
 
     } catch (error) {
-        console.log(error.message)
-        res.json({success: false, message: error.message})
+        console.log('Error in generateBlogTitle:', error.message, error.status || error.response?.status);
+        
+        const statusCode = error.status || error.response?.status || error.statusCode;
+        
+        if (statusCode === 429) {
+            return res.status(429).json({
+                success: false, 
+                message: "Too many requests. Please wait a few seconds and try again."
+            });
+        }
+        
+        res.status(statusCode || 500).json({
+            success: false, 
+            message: error.message || "Failed to generate blog titles. Please try again."
+        });
     }
 }
 
@@ -208,8 +257,8 @@ export const resumeReview = async (req, res)=>{
 
         const prompt = `Review the following resume and provide constructive feedback on its strengths, weaknesses, and areas for improvement. Resume Content:\n\n${pdfData.text}`
 
-       const response = await AI.chat.completions.create({
-            model: "gemini-2.0-flash",
+        const response = await makeAICall({
+            model: "gemini-1.5-flash",
             messages: [{ role: "user", content: prompt, } ],
             temperature: 0.7,
             max_tokens: 1000,
@@ -223,7 +272,20 @@ export const resumeReview = async (req, res)=>{
         res.json({ success: true, content})
 
     } catch (error) {
-        console.log(error.message)
-        res.json({success: false, message: error.message})
+        console.log('Error in resumeReview:', error.message, error.status || error.response?.status);
+        
+        const statusCode = error.status || error.response?.status || error.statusCode;
+        
+        if (statusCode === 429) {
+            return res.status(429).json({
+                success: false, 
+                message: "Too many requests. Please wait a few seconds and try again."
+            });
+        }
+        
+        res.status(statusCode || 500).json({
+            success: false, 
+            message: error.message || "Failed to review resume. Please try again."
+        });
     }
 }
