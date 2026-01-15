@@ -5,6 +5,13 @@ import { upload } from "../configs/multer.js";
 
 const aiRouter = express.Router();
 
+console.log('AI Router loaded');
+
+aiRouter.use((req, res, next) => {
+    console.log(`AI Router received request: ${req.method} ${req.url}`);
+    next();
+});
+
 aiRouter.post('/generate-article', auth, generateArticle)
 aiRouter.post('/generate-blog-title', auth, generateBlogTitle)
 aiRouter.post('/generate-image', auth, generateImage)
